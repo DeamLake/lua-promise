@@ -37,7 +37,6 @@ function Promise.new(executor)
             return
         end
 
-        -- 这里需要异步调用
         ret.result = value
         ret.status = Promise.FULFILLED
         for _, func in ipairs(ret.resolveList) do
@@ -102,7 +101,7 @@ function Promise:next(onFulfilled, onRejected)
             end)
             self.rejectList.push(function(errInfo)
                 local calRet = safeCall(onRejected, nil, reject, errInfo)
-                 if calRet ~= nil then runNext(ret, calRet, resolve, reject) end
+                if calRet ~= nil then runNext(ret, calRet, resolve, reject) end
             end)
         end) 
     else
@@ -115,10 +114,108 @@ function Promise:next(onFulfilled, onRejected)
         end
         ret = Promise.new(function(resolve, reject)
             local calRet = safeCall(doFunc, nil, reject, self.result)
-             if calRet then runNext(ret, calRet, resolve, reject) end
+            if calRet then runNext(ret, calRet, resolve, reject) end
         end)
     end
     return ret
+end
+
+-- 处理异常
+function Promise:catch(onRejected)
+    return self:next(nil, onRejected)
+end
+
+-- 任何情况下都执行callback
+function Promise:finally(callback)
+    return self:next(callback, callback)
+end
+
+-- 直接返回成功的Promise对象
+function Promise.resolve(value)
+    return Promise.new(function(resolve, reject)
+        resolve(value)
+    end)
+end
+
+-- 直接返回失败的Promise对象
+function Promise.reject(errInfo)
+    return Promise.new(function(resolve, reject)
+        reject(errInfo)
+    end)
+end
+
+-- 所有执行成功才成功
+function Promise.all(promiseList)
+    local count = #promiseList
+    local retList = {}
+    return Promise.new(function(resolve, reject)
+        for index, promise in ipairs(promiseList) do
+            promise.next(function(value)
+                retList[index] = value
+                count = count - 1
+                if count == 0 then
+                    resolve(retList)
+                end
+            end).catch(function(errInfo)
+                reject(errInfo)
+            end)
+        end
+    end)
+end
+
+-- 返回第一个执行成功的
+function Promise.race(promiseList)
+    return Promise.new(function(resolve, reject)
+        for _, promise in ipairs(promiseList) do
+            promise.next(function(value)
+                resolve(value)
+            end).catch(function(errInfo)
+                reject(errInfo)
+            end)
+        end
+    end)
+end
+
+-- 成功一个即返回成功
+function Promise.any(promiseList)
+    local count = #promiseList
+    local errList = {}
+    return Promise.new(function(resolve, reject)
+        for index, promise in ipairs(promiseList) do
+            promise.next(function(value)
+                resolve(value)
+            end).catch(function(errInfo)
+                    errList[index] = errInfo
+                    count = count - 1
+                    if count == 0 then
+                        reject(errList)
+                    end
+            end)
+        end
+    end)
+end
+
+-- 所有执行完即成功
+function Promise.allSettled(promiseList)
+    local count = #promiseList
+    local retList = {}
+    return Promise.new(function(resolve, reject)
+        for index, promise in ipairs(promiseList) do
+            promise.next(function(value)
+                retList[index] = value
+                count = count - 1
+                if count == 0 then
+                    resolve(retList)
+                end
+            end).catch(function(errInfo)
+                retList[index] = errInfo
+                count = count - 1
+                if  count == 0 then
+                    resolve(retList)
+                end
+            end)
+        end
+    end)
 end
 
 return Promise
