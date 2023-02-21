@@ -69,7 +69,7 @@ p = Promise.any(promiseList)
 ```
 * Promise.allSettled()
 ```lua
-p = Promise.any(promiseList)
+p = Promise.allSettled(promiseList)
 -- Every items in promiseList have been resolved/rejected
 ```
 
